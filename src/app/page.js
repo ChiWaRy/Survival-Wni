@@ -16,29 +16,36 @@ export default function GuestLoginPage() {
         setLoading(true);
 
         try {
-            // 1. Sign in secara anonim
-            const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-            if (authError) throw authError;
+            // 1. Pastikan ada session (anonymous sign-in)
+            let user = null;
+            const { data: { user: existing } } = await supabase.auth.getUser();
+            if (existing) {
+                user = existing;
+            } else {
+                const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
+                if (authError) throw authError;
+                user = authData.user;
+            }
 
-            const user = authData.user;
-
-            // 2. Buat profile pemain di database
+            // 2. Simpan / perbarui profile pemain di database (upsert agar tidak error saat login ulang)
             const { error: profileError } = await supabase
                 .from('profiles')
-                .insert([
-                    {
-                        id: user.id,
-                        username: username.trim(),
-                        total_rg: 500, // Bonus awal rakyat biasa
-                        gold: 0,
-                        highest_level: 1,
-                    },
-                ]);
+                .upsert(
+                    [
+                        {
+                            id: user.id,
+                            username: username.trim(),
+                        },
+                    ],
+                    { onConflict: 'id', ignoreDuplicates: false }
+                );
 
             if (profileError) throw profileError;
 
             // 3. Simpan session local dan masuk ke Main Menu
             localStorage.setItem('player_username', username.trim());
+            // paksa CloudSync menarik progres terbaru dari server
+            try { sessionStorage.removeItem('cloud_save_loaded'); } catch (e) { /* ignore */ }
             router.push('/menu');
         } catch (error) {
             alert('Gagal masuk: ' + error.message);

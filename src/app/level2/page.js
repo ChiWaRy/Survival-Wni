@@ -1,4 +1,6 @@
 // src/app/level2/page.js
+// LEVEL 2 : LOKER JALUR ORANG DALAM (ORDAL)
+// Outdoor komplek PT. Maju Mundur Sentosa (gaya sama seperti Level 1)
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -12,35 +14,80 @@ export default function Level2Page() {
     const [dialogIndex, setDialogIndex] = useState(0);
     const [playerMoney, setPlayerMoney] = useState(200000);
     const [lastActionText, setLastActionText] = useState('');
+    const [bossHpPct, setBossHpPct] = useState(100);
+    const [playerHpPct, setPlayerHpPct] = useState(100);
 
+    // ==================================================
+    // NASKAH DIALOG LENGKAP (DARI SPEC)
+    // ==================================================
+    // A. Dialog Intro Level 2 (Monolog Arya)
     const introDialogs = [
         { speaker: "Arya", text: "Akhirnya surat pengantar dari kelurahan sudah di tangan. Hari ini aku ada jadwal wawancara kerja di PT. Maju Mundur Sentosa." },
-        { speaker: "Arya", text: "Kakek pasti bangga kalau aku bisa diterima kerja di pabrik ini. Aku harus bertanya ke Satpam dulu di mana ruangan HRD-nya." }
+        { speaker: "Arya", text: "Kakek pasti bangga kalau aku bisa diterima kerja di pabrik ini. Aku harus bertanya ke Satpam dulu di mana ruangan HRD-nya." },
     ];
 
+    // B. Dialog Informan (Lobi - Arya & Komandan Satpam)
+    const satpamDialogs = [
+        { speaker: "Arya", text: "Permisi, Pak. Saya Arya, mau menghadiri panggilan wawancara kerja tahap akhir." },
+        { speaker: "Komandan Satpam", text: "Oh, pelamar baru ya? Tadi hasil tes tertulis sudah ditempel, nama kamu dapat skor paling tinggi tuh." },
+        { speaker: "Arya", text: "Syukurlah, Pak! Lalu saya harus menghadap ke mana sekarang?" },
+        { speaker: "Komandan Satpam", text: "Langsung saja masuk ke lorong ruangan HRD di sebelah kiri sana, pintu berkarpet abu-abu. Tapi... bapak mau bisikin sesuatu, Dek." },
+        { speaker: "Arya", text: "Ada apa ya, Pak?" },
+        { speaker: "Komandan Satpam", text: "Hati-hati, HRD di dalam itu terkenal licik. Banyak pelamar pintar yang gagal cuma karena kalah sama 'amplop' dan titipan orang dalam. Siapkan mentalmu." },
+    ];
+
+    // C. Dialog Konfrontasi Bos (Ruang Interview - Arya & Oknum HRD)
+    const hrdDialogs = [
+        { speaker: "Oknum HRD", text: "Silakan masuk, Arya. Saya sudah lihat berkas dan hasil ujianmu. Nilaimu sempurna, sangat memenuhi kualifikasi pabrik kami." },
+        { speaker: "Arya", text: "Terima kasih, Pak! Apakah artinya saya bisa mulai bekerja minggu depan?" },
+        { speaker: "Oknum HRD", text: "Tunggu dulu, jangan buru-buru senang. Kursi operator di sini sangat terbatas, dan kebetulan ada keponakan manajer yang juga mengincar posisi ini." },
+        { speaker: "Arya", text: "Tapi bukankah rekrutmen ini terbuka secara murni berdasarkan nilai tes, Pak?" },
+        { speaker: "Oknum HRD", text: "Nilai tes itu cuma formalitas di atas kertas! Kalau kamu mau namamu yang saya ketik di surat kelulusan, bayar biaya 'pengamanan kursi' Rp200.000 sekarang juga sebagai tanda terima kasih ke saya." },
+        { speaker: "Arya", text: "Ini pemerasan namanya, Pak! Saya melamar dengan ijazah dan keahlian yang sah. Praktik jual-beli loker Bapak ini akan saya rekam dan bongkar ke publik!" },
+        { speaker: "Oknum HRD", text: "Kurang ajar! Sini kamu, saya sobek berkas lamaranmu sekarang juga!" },
+    ];
+
+    const getActiveDialogs = () => {
+        if (gameState === 'STORY_INTRO') return introDialogs;
+        if (gameState === 'SATPAM_DIALOG') return satpamDialogs;
+        if (gameState === 'HRD_DIALOG') return hrdDialogs;
+        return [];
+    };
+
     const handleNextDialog = () => {
-        if (dialogIndex < introDialogs.length - 1) {
+        const list = getActiveDialogs();
+        if (dialogIndex < list.length - 1) {
             setDialogIndex(dialogIndex + 1);
         } else {
-            setGameState('MISSION_OVERLAY');
+            if (gameState === 'STORY_INTRO') setGameState('MISSION_OVERLAY');
+            else if (gameState === 'SATPAM_DIALOG') setGameState('WALK_TO_HRD');
+            else if (gameState === 'HRD_DIALOG') setGameState('FIGHT_CHOICE');
         }
     };
 
+    // ==================================================
+    // REF ASSET & ENTITAS
+    // ==================================================
     const aryaImgRef = useRef(null);
     const satpamImgRef = useRef(null);
     const hrdImgRef = useRef(null);
+    const cityTilesetRef = useRef(null); // gedung.jpg
+    const extTilesetRef = useRef(null);  // tilemap_packed.png (aspal)
 
+    // Arya (Player): HP 100, Speed 4
     const playerRef = useRef({
-        x: 0, y: 0, size: 72, speed: 4, health: 100, maxHealth: 100, facingDirection: 'up',
+        x: 0, y: 0, size: 72, speed: 4, health: 100, maxHealth: 100, facingDirection: 'down',
         isWalking: false, frameIndex: 1, frameTimer: 0, isAttacking: false, attackTimer: 0, attackCooldown: false,
     });
 
-    const satpamRef = useRef({ x: 550, y: 350, size: 72, facingDirection: 'down', frameIndex: 1, frameTimer: 0 });
+    // Komandan Satpam (NPC Informan)
+    const satpamRef = useRef({ x: 0, y: 0, size: 72, facingDirection: 'down', frameIndex: 1, frameTimer: 0 });
 
-    // Bos Level 2: Lebih tebal (150 HP) dan sedikit lebih cepat
-    const hrdRef = useRef({ x: 150, y: 150, size: 72, speed: 2.5, health: 150, maxHealth: 150, facingDirection: 'down', isWalking: false, frameIndex: 1, frameTimer: 0 });
+    // Oknum HRD (Bos Level 2): HP 150, Speed 2.5, Damage 1.0/frame
+    const hrdRef = useRef({ x: 0, y: 0, size: 72, speed: 2.5, health: 150, maxHealth: 150, facingDirection: 'down', isWalking: false, frameIndex: 1, frameTimer: 0 });
 
     const keysRef = useRef({});
+    const initedRef = useRef(false);
 
     useEffect(() => {
         const handleKeyDown = (e) => { keysRef.current[e.key.toLowerCase()] = true; };
@@ -48,7 +95,8 @@ export default function Level2Page() {
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
 
-        const loadTransparentImage = (src, ref) => {
+        // Load karakter (hapus background putih) - sama seperti Level 1
+        const loadCharImage = (src, ref) => {
             const img = new Image();
             img.src = src;
             img.onload = () => {
@@ -57,14 +105,10 @@ export default function Level2Page() {
                 tempCanvas.height = img.naturalHeight;
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCtx.drawImage(img, 0, 0);
-
                 const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
                 const data = imgData.data;
-
                 for (let i = 0; i < data.length; i += 4) {
-                    if (data[i] > 220 && data[i + 1] > 220 && data[i + 2] > 220) {
-                        data[i + 3] = 0;
-                    }
+                    if (data[i] > 220 && data[i + 1] > 220 && data[i + 2] > 220) data[i + 3] = 0;
                 }
                 tempCtx.putImageData(imgData, 0, 0);
                 const processedImg = new Image();
@@ -73,10 +117,36 @@ export default function Level2Page() {
             };
         };
 
-        // Memanfaatkan aset gambar yang sudah ada di folder public/assets
-        loadTransparentImage('/assets/arya.jpg', aryaImgRef);
-        loadTransparentImage('/assets/pak_rt.jpg', satpamImgRef); // Pak RT jadi Satpam sementara
-        loadTransparentImage('/assets/petugas_pungli.jpg', hrdImgRef); // Pungli jadi HRD
+        // Load gedung.jpg (hapus background hitam pekat) - sama seperti Level 1
+        const loadBuildingImage = (src, ref) => {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = img.naturalWidth;
+                tempCanvas.height = img.naturalHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(img, 0, 0);
+                const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                const data = imgData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i] < 15 && data[i + 1] < 15 && data[i + 2] < 15) data[i + 3] = 0;
+                }
+                tempCtx.putImageData(imgData, 0, 0);
+                const processedImg = new Image();
+                processedImg.src = tempCanvas.toDataURL();
+                processedImg.onload = () => { ref.current = processedImg; };
+            };
+        };
+
+        loadCharImage('/assets/arya.jpg', aryaImgRef);            // Arya (Player)
+        loadCharImage('/assets/pak_rt.jpg', satpamImgRef);        // Komandan Satpam
+        loadCharImage('/assets/petugas_pungli.jpg', hrdImgRef);   // Oknum HRD
+        loadBuildingImage('/assets/gedung.jpg', cityTilesetRef);  // Gedung-gedung
+
+        const extTilesetImg = new Image();
+        extTilesetImg.src = '/assets/tilemap_packed.png';
+        extTilesetImg.onload = () => { extTilesetRef.current = extTilesetImg; };
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
@@ -92,10 +162,6 @@ export default function Level2Page() {
         const resizeCanvas = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            if (playerRef.current.x === 0) {
-                playerRef.current.x = canvas.width / 2 + 100;
-                playerRef.current.y = canvas.height - 150;
-            }
         };
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -103,72 +169,129 @@ export default function Level2Page() {
         let animationFrameId;
 
         const gameLoop = () => {
+            const W = canvas.width;
+            const H = canvas.height;
             const player = playerRef.current;
             const satpam = satpamRef.current;
             const hrd = hrdRef.current;
             const keys = keysRef.current;
+            const cityTileset = cityTilesetRef.current;
+            const extTileset = extTilesetRef.current;
+            const tileSize = 64;
 
-            // ==========================================
-            // MENGGAMBAR INTERIOR KANTOR (Procedural)
-            // ==========================================
-            ctx.fillStyle = '#f8fafc'; // Lantai ubin putih/abu terang
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // ==========================================================
+            // TATA LETAK JALAN (aspal) - membentuk cincin agar bisa kiting
+            // ==========================================================
+            const roadSideW = W * 0.12;          // lebar jalan vertikal
+            const leftX = W * 0.08;              // x jalan vertikal kiri
+            const rightX = W * 0.80;             // x jalan vertikal kanan
+            const topY = H * 0.22;               // y jalan horizontal atas
+            const topH = H * 0.12;               // tinggi jalan horizontal atas
+            const botY = H * 0.45;               // y jalan horizontal bawah (utama)
+            const botH = H * 0.15;               // tinggi jalan horizontal bawah
+            const vertBottom = botY + botH;
 
-            // Garis ubin lantai
-            ctx.strokeStyle = '#e2e8f0';
-            ctx.lineWidth = 2;
-            for (let i = 0; i < canvas.width; i += 64) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-            }
-            for (let i = 0; i < canvas.height; i += 64) {
-                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
-            }
+            const roadSegs = [
+                { x: 0, y: botY, w: W, h: botH },                                     // horizontal bawah (utama)
+                { x: leftX, y: topY, w: (rightX + roadSideW) - leftX, h: topH },      // horizontal atas
+                { x: leftX, y: topY, w: roadSideW, h: vertBottom - topY },            // vertikal kiri
+                { x: rightX, y: topY, w: roadSideW, h: vertBottom - topY },           // vertikal kanan
+            ];
 
-            // Dinding Atas
-            ctx.fillStyle = '#334155';
-            ctx.fillRect(0, 0, canvas.width, 80);
-            ctx.fillStyle = '#1e293b';
-            ctx.fillRect(0, 70, canvas.width, 10);
+            // Titik pintu masuk gedung HRD (di atas jalan utama, tengah)
+            const hrdEntrance = { x: W * 0.5, y: botY };
+            const hrdBuilding = { x: leftX + roadSideW, y: topY + topH, w: (rightX) - (leftX + roadSideW), h: botY - (topY + topH) };
 
-            // Sekat Ruangan HRD (Kiri Atas)
-            const hrdRoomW = 400;
-            const hrdRoomH = 350;
-            ctx.fillStyle = '#475569';
-            ctx.fillRect(0, 80, hrdRoomW, 15); // Dinding atas ruangan HRD
-            ctx.fillRect(hrdRoomW, 80, 15, hrdRoomH); // Dinding kanan ruangan HRD
-
-            // Pintu HRD
-            const doorY = 250;
-            ctx.fillStyle = '#f8fafc'; // Hapus dinding untuk pintu
-            ctx.fillRect(hrdRoomW, doorY, 15, 100);
-            ctx.fillStyle = '#94a3b8'; // Karpet Pintu
-            ctx.fillRect(hrdRoomW - 20, doorY, 55, 100);
-
-            if (gameState !== 'BOSS_FIGHT' && gameState !== 'PLAYING') {
-                ctx.fillStyle = '#facc15'; ctx.font = 'bold 12px monospace';
-                ctx.fillText('RUANG HRD', hrdRoomW - 35, doorY - 10);
-            }
-
-            // Meja Resepsionis / Satpam (Kanan)
-            const deskX = 500; const deskY = 400; const deskW = 200; const deskH = 60;
-            ctx.fillStyle = '#b45309';
-            ctx.fillRect(deskX, deskY, deskW, deskH);
-            ctx.fillStyle = '#78350f';
-            ctx.fillRect(deskX + 10, deskY + 10, deskW - 20, deskH - 20);
-
-            // Pot Tanaman Hias
-            const drawPlant = (px, py) => {
-                ctx.fillStyle = '#166534'; ctx.beginPath(); ctx.arc(px, py, 25, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#22c55e'; ctx.beginPath(); ctx.arc(px, py, 18, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI * 2); ctx.fill();
+            const isOnRoad = (x, y, size) => {
+                for (const s of roadSegs) {
+                    if (x >= s.x && x + size <= s.x + s.w && y >= s.y && y + size <= s.y + s.h) return true;
+                }
+                return false;
             };
-            drawPlant(80, 130);
-            drawPlant(deskX - 40, deskY + 30);
-            drawPlant(deskX + deskW + 40, deskY + 30);
 
-            // ==========================================
-            // LOGIKA PERGERAKAN & KOLISI
-            // ==========================================
+            // Inisialisasi posisi sekali saja
+            if (!initedRef.current) {
+                player.x = W * 0.5;
+                player.y = botY + (botH - player.size) / 2;
+                player.health = 100;
+
+                // Satpam berjaga di jalan utama, dekat pintu masuk
+                satpam.x = W * 0.34;
+                satpam.y = botY + (botH - satpam.size) / 2;
+
+                // HRD muncul di jalan utama saat pertarungan
+                hrd.x = W * 0.5;
+                hrd.y = botY + (botH - hrd.size) / 2;
+                hrd.health = 150;
+
+                initedRef.current = true;
+            }
+
+            // ==========================================================
+            // RENDER MAP OUTDOOR (gaya Level 1)
+            // ==========================================================
+            // Rumput hijau
+            ctx.fillStyle = '#2d4c1e';
+            ctx.fillRect(0, 0, W, H);
+
+            // Jalan aspal (dari tilemap_packed.png - crop 16,272,16,16)
+            if (extTileset) {
+                for (const s of roadSegs) {
+                    for (let x = s.x; x < s.x + s.w; x += tileSize) {
+                        for (let y = s.y; y < s.y + s.h; y += tileSize) {
+                            const tw = Math.min(tileSize, s.x + s.w - x);
+                            const th = Math.min(tileSize, s.y + s.h - y);
+                            ctx.drawImage(extTileset, 16, 272, 16, 16, x, y, tw, th);
+                        }
+                    }
+                    // Garis marka jalan putih
+                    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+                    if (s.w > s.h) {
+                        for (let x = s.x + 16; x < s.x + s.w; x += 128) ctx.fillRect(x, s.y + s.h / 2 - 4, 64, 8);
+                    } else {
+                        for (let y = s.y + 16; y < s.y + s.h; y += 128) ctx.fillRect(s.x + s.w / 2 - 4, y, 8, 64);
+                    }
+                }
+            }
+
+            // ==========================================================
+            // GEDUNG-GEDUNG (dari gedung.jpg)
+            // ==========================================================
+            if (cityTileset && cityTileset.naturalWidth > 0) {
+                const w = cityTileset.naturalWidth;
+                const h = cityTileset.naturalHeight;
+
+                // 1. Gedung PABRIK/HRD utama (di dalam cincin jalan)
+                ctx.drawImage(cityTileset, w * 0.48, 0, w * 0.52, h * 0.45,
+                    hrdBuilding.x, hrdBuilding.y, hrdBuilding.w, hrdBuilding.h);
+
+                // 2. Gedung kantor pendamping (kiri bawah, di rumput)
+                ctx.drawImage(cityTileset, 0, h * 0.45, w * 0.30, h * 0.55,
+                    W * 0.01, H * 0.62, W * 0.16, H * 0.32);
+
+                // 3. Rumah/pos kecil (kanan bawah, di rumput)
+                ctx.drawImage(cityTileset, 0, 0, w * 0.14, h * 0.38,
+                    W * 0.86, H * 0.64, W * 0.11, H * 0.26);
+
+                // 4. Pohon rindang tersebar di rumput
+                const tree = (tx, ty, tw, th) => ctx.drawImage(cityTileset, w * 0.6, h * 0.4, w * 0.16, h * 0.3, tx, ty, tw, th);
+                tree(W * 0.22, H * 0.63, W * 0.1, H * 0.16);
+                tree(W * 0.68, H * 0.63, W * 0.1, H * 0.16);
+                tree(W * 0.45, H * 0.05, W * 0.1, H * 0.14);
+                tree(W * 0.05, H * 0.03, W * 0.1, H * 0.14);
+            }
+
+            // Pintu masuk gedung HRD (penanda)
+            if (gameState === 'WALK_TO_HRD') {
+                ctx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+                ctx.fillRect(hrdEntrance.x - 40, hrdEntrance.y - 12, 80, 20);
+                ctx.fillStyle = '#0f172a'; ctx.font = 'bold 12px monospace';
+                ctx.fillText('PINTU HRD', hrdEntrance.x - 34, hrdEntrance.y + 3);
+            }
+
+            // ==========================================================
+            // LOGIKA PERGERAKAN PEMAIN (tertahan di aspal)
+            // ==========================================================
             player.isWalking = false;
 
             if (gameState === 'EXPLORE_LOBBY' || gameState === 'WALK_TO_HRD' || gameState === 'PLAYING') {
@@ -184,33 +307,12 @@ export default function Level2Page() {
                     const nextX = player.x + (dx / length) * player.speed;
                     const nextY = player.y + (dy / length) * player.speed;
 
-                    let canMove = true;
-
-                    // Kolisi Dinding Atas
-                    if (nextY < 80) canMove = false;
-
-                    // Kolisi Layar
-                    if (nextX < 0 || nextX > canvas.width - player.size) canMove = false;
-                    if (nextY > canvas.height - player.size) canMove = false;
-
-                    // Kolisi Meja Satpam
-                    const playerBox = { x: nextX, y: nextY, width: player.size, height: player.size };
-                    const deskBox = { x: deskX, y: deskY, width: deskW, height: deskH };
-                    if (rectIntersect(playerBox, deskBox)) canMove = false;
-
-                    // Kolisi Dinding HRD
-                    if (nextX < hrdRoomW + 15 && nextY < 80 + hrdRoomH) {
-                        // Cek apakah melewati pintu?
-                        if (!(nextY >= doorY && nextY + player.size <= doorY + 100 && nextX > hrdRoomW - 40 && nextX < hrdRoomW + 30)) {
-                            // Jika tidak pas di pintu dan mencoba masuk area dinding HRD, blokir
-                            if (nextX < hrdRoomW + 15 && player.x >= hrdRoomW + 15) canMove = false; // nabrak dari kanan
-                            if (nextY < 80 + hrdRoomH && player.y >= 80 + hrdRoomH && nextX < hrdRoomW + 15) canMove = false; // nabrak dari bawah
-                        }
-                    }
-
-                    if (canMove) {
-                        player.x = nextX;
-                        player.y = nextY;
+                    if (isOnRoad(nextX, nextY, player.size)) {
+                        player.x = nextX; player.y = nextY;
+                    } else if (isOnRoad(nextX, player.y, player.size)) {
+                        player.x = nextX; // geser horizontal saja (sliding)
+                    } else if (isOnRoad(player.x, nextY, player.size)) {
+                        player.y = nextY; // geser vertikal saja (sliding)
                     }
                 }
             }
@@ -222,23 +324,23 @@ export default function Level2Page() {
                 player.frameIndex = 1;
             }
 
-            // ==========================================
+            // ==========================================================
             // TRIGGER EVENT CERITA
-            // ==========================================
+            // ==========================================================
             if (gameState === 'EXPLORE_LOBBY') {
                 const distToSatpam = Math.hypot(player.x - satpam.x, player.y - satpam.y);
-                if (distToSatpam < 120) {
+                if (distToSatpam < 130) {
                     ctx.fillStyle = '#facc15'; ctx.font = 'bold 13px monospace';
-                    ctx.fillText('[ Tekan E untuk Bertanya pada Satpam ]', satpam.x - 90, satpam.y - 15);
-                    if (keys['e']) setGameState('SATPAM_DIALOG');
+                    ctx.fillText('[ Tekan E untuk Bertanya pada Satpam ]', satpam.x - 110, satpam.y - 18);
+                    if (keys['e']) { setDialogIndex(0); setGameState('SATPAM_DIALOG'); }
                 }
             } else if (gameState === 'WALK_TO_HRD') {
-                // Jika Arya masuk ke dalam ruangan HRD (melewati batas x)
-                if (player.x < hrdRoomW - 50 && player.y < 80 + hrdRoomH) {
-                    setGameState('HRD_DIALOG');
-                }
+                const distToEntrance = Math.hypot(player.x - hrdEntrance.x, player.y - hrdEntrance.y);
+                if (distToEntrance < 90) { setDialogIndex(0); setGameState('HRD_DIALOG'); }
             } else if (gameState === 'PLAYING') {
+                // ---------------- AI OKNUM HRD (mengejar di aspal) ----------------
                 hrd.isWalking = true;
+
                 const dx = player.x - hrd.x; const dy = player.y - hrd.y;
                 if (Math.abs(dx) > Math.abs(dy)) { hrd.facingDirection = dx > 0 ? 'right' : 'left'; }
                 else { hrd.facingDirection = dy > 0 ? 'down' : 'up'; }
@@ -249,17 +351,11 @@ export default function Level2Page() {
                 if (hrd.y < player.y) nextHrdY += hrd.speed;
                 if (hrd.y > player.y) nextHrdY -= hrd.speed;
 
-                // Simple collision for HRD so he doesn't get stuck entirely on desk
-                const hrdBox = { x: nextHrdX, y: nextHrdY, width: hrd.size, height: hrd.size };
-                const deskBox = { x: deskX, y: deskY, width: deskW, height: deskH };
-
-                if (!rectIntersect(hrdBox, deskBox) && nextHrdY > 80) {
-                    hrd.x = nextHrdX;
-                    hrd.y = nextHrdY;
+                if (isOnRoad(nextHrdX, nextHrdY, hrd.size)) {
+                    hrd.x = nextHrdX; hrd.y = nextHrdY;
                 } else {
-                    // Sliding if stuck on desk
-                    if (!rectIntersect({ x: nextHrdX, y: hrd.y, width: hrd.size, height: hrd.size }, deskBox)) hrd.x = nextHrdX;
-                    if (!rectIntersect({ x: hrd.x, y: nextHrdY, width: hrd.size, height: hrd.size }, deskBox)) hrd.y = nextHrdY;
+                    if (isOnRoad(nextHrdX, hrd.y, hrd.size)) hrd.x = nextHrdX;
+                    if (isOnRoad(hrd.x, nextHrdY, hrd.size)) hrd.y = nextHrdY;
                 }
 
                 hrd.frameTimer++;
@@ -269,18 +365,20 @@ export default function Level2Page() {
                     player.attackTimer--; if (player.attackTimer <= 0) player.isAttacking = false;
                 }
 
+                // Serangan: rekam bukti pakai kamera HP (F / Space)
                 const triggerAttack = () => {
                     if (!player.isAttacking && !player.attackCooldown) {
                         player.isAttacking = true; player.attackTimer = 18; player.attackCooldown = true;
                         const beam = getHpBeamRect(player);
                         if (rectIntersect(beam, hrd)) {
-                            hrd.health -= 25; setLastActionText('📱 Bukti terekam! Mental HRD menurun! (-25 HP)');
+                            hrd.health -= 25; setLastActionText('📱 Bukti pemerasan terekam! Mental Oknum HRD goyah! (-25 HP)');
+                            setBossHpPct(Math.max(0, (hrd.health / hrd.maxHealth) * 100));
                             if (hrd.health <= 0) {
                                 setGameState('VICTORY');
-                                setLastActionText('Praktik Orang Dalam berhasil kamu bongkar! Perusahaan memecat Oknum HRD tersebut.');
+                                setLastActionText('Praktik jual-beli loker berhasil kamu bongkar! Oknum HRD dicopot dari jabatannya.');
                             }
                         } else {
-                            setLastActionText('📱 Arya merekam aksi HRD!');
+                            setLastActionText('📱 Arya merekam aksi Oknum HRD... (arahkan tepat ke arah HRD!)');
                         }
                         setTimeout(() => { player.attackCooldown = false; }, 300);
                     }
@@ -288,19 +386,21 @@ export default function Level2Page() {
 
                 if (keys['f'] || keys[' ']) triggerAttack();
 
+                // Damage 1.0 / frame saat bersentuhan
                 if (rectIntersect(player, hrd) && !player.isAttacking) {
-                    player.health -= 1; // Damage lebih sakit
-                    setLastActionText('⚠️ Dokumen lamaranmu mau disobek Oknum HRD!');
+                    player.health -= 1.0;
+                    setPlayerHpPct(Math.max(0, (player.health / player.maxHealth) * 100));
+                    setLastActionText('⚠️ Dokumen lamaranmu mau disobek Oknum HRD! Menjauhlah!');
                     if (player.health <= 0) {
                         setGameState('GAMEOVER');
-                        setLastActionText('Mentalmu hancur! Kamu diusir dari perusahaan karena menolak bayar Ordal.');
+                        setLastActionText('Mentalmu hancur! Kamu diusir dari perusahaan karena menolak bayar uang penempatan (Ordal).');
                     }
                 }
             }
 
-            // ==========================================
-            // RENDER SPRITES
-            // ==========================================
+            // ==========================================================
+            // RENDER SPRITES (gaya Level 1: label putih)
+            // ==========================================================
             renderSpriteSheet(ctx, satpamImgRef.current, satpam, 'Satpam');
 
             if (gameState === 'HRD_DIALOG' || gameState === 'FIGHT_CHOICE' || gameState === 'PLAYING') {
@@ -311,7 +411,7 @@ export default function Level2Page() {
 
             if (player.isAttacking) {
                 const beam = getHpBeamRect(player);
-                ctx.fillStyle = 'rgba(59, 130, 246, 0.45)'; // Warna beam biru muda (Flash HP)
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.45)';
                 ctx.fillRect(beam.x, beam.y, beam.width, beam.height);
                 ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2; ctx.strokeRect(beam.x, beam.y, beam.width, beam.height);
             }
@@ -326,14 +426,21 @@ export default function Level2Page() {
 
     const restartGame = () => {
         const canvas = canvasRef.current;
-        playerRef.current = { ...playerRef.current, x: canvas ? canvas.width / 2 + 100 : 400, y: canvas ? canvas.height - 150 : 500, health: 100, isWalking: false, facingDirection: 'up', frameIndex: 1 };
-        hrdRef.current = { ...hrdRef.current, x: 150, y: 150, health: 150, isWalking: false, facingDirection: 'down', frameIndex: 1 };
-        setPlayerMoney(200000); setGameState('EXPLORE_LOBBY'); setDialogIndex(0); setLastActionText('');
+        const W = canvas ? canvas.width : 1200;
+        const H = canvas ? canvas.height : 720;
+        const botY = H * 0.45, botH = H * 0.15;
+
+        playerRef.current = { ...playerRef.current, x: W * 0.5, y: botY + (botH - 72) / 2, health: 100, isWalking: false, facingDirection: 'down', frameIndex: 1 };
+        hrdRef.current = { ...hrdRef.current, x: W * 0.5, y: botY + (botH - 72) / 2, health: 150, isWalking: false, facingDirection: 'down', frameIndex: 1 };
+        setPlayerMoney(200000); setBossHpPct(100); setPlayerHpPct(100);
+        setDialogIndex(0); setLastActionText('');
+        setGameState('EXPLORE_LOBBY');
     };
 
     const handleSurrender = () => {
         const denda = 200000; setPlayerMoney((prev) => Math.max(0, prev - denda));
-        setGameState('GAMEOVER'); setLastActionText(`Kamu memilih bayar "Uang Rokok" Rp ${denda.toLocaleString('id-ID')} ke HRD. Tapi tabunganmu habis dan perusahaan ini terbukti toxic!`);
+        setGameState('GAMEOVER');
+        setLastActionText(`Kamu memilih membayar "uang penempatan" Rp ${denda.toLocaleString('id-ID')} ke Oknum HRD. Tabunganmu habis dan perusahaan ini terbukti toxic!`);
     };
 
     const getHpBeamRect = (p) => {
@@ -353,7 +460,10 @@ export default function Level2Page() {
         if (img) {
             const frameW = img.naturalWidth / 3, frameH = img.naturalHeight / 4;
             let row = 0;
-            if (entity.facingDirection === 'down') row = 0; if (entity.facingDirection === 'left') row = 1; if (entity.facingDirection === 'right') row = 2; if (entity.facingDirection === 'up') row = 3;
+            if (entity.facingDirection === 'down') row = 0;
+            if (entity.facingDirection === 'left') row = 1;
+            if (entity.facingDirection === 'right') row = 2;
+            if (entity.facingDirection === 'up') row = 3;
             ctx.drawImage(img, entity.frameIndex * frameW, row * frameH, frameW, frameH, entity.x, entity.y, entity.size, entity.size * 1.15);
         } else {
             ctx.fillStyle = label === 'Arya' ? '#22c55e' : label === 'Oknum HRD' ? '#ef4444' : '#3b82f6';
@@ -366,43 +476,57 @@ export default function Level2Page() {
             ctx.fillStyle = label === 'Arya' ? '#22c55e' : '#facc15'; ctx.fillRect(entity.x - (barW - entity.size) / 2, entity.y - 10, barW * pct, barH);
         }
 
-        ctx.fillStyle = '#0f172a'; ctx.font = 'bold 12px monospace'; const textW = ctx.measureText(label).width;
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 12px monospace'; const textW = ctx.measureText(label).width;
         ctx.fillText(label, entity.x + (entity.size - textW) / 2, entity.y - 16);
     };
+
+    const activeDialogs = getActiveDialogs();
 
     return (
         <div className="relative w-screen h-screen bg-neutral-950 text-white font-mono select-none overflow-hidden">
             {/* HUD HEADER */}
             <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between bg-neutral-900/90 border border-neutral-700 px-5 py-3 rounded-xl shadow-xl backdrop-blur">
                 <div className="flex items-center gap-4">
-                    <span className="px-3 py-1 bg-blue-500/25 border border-blue-500 text-blue-400 text-xs font-bold rounded-md">
-                        LEVEL 2
-                    </span>
-                    <h1 className="text-sm font-bold tracking-wide text-white">
-                        SURVIVAL WNI : Loker Jalur Orang Dalam
-                    </h1>
+                    <span className="px-3 py-1 bg-blue-500/25 border border-blue-500 text-blue-400 text-xs font-bold rounded-md">LEVEL 2</span>
+                    <h1 className="text-sm font-bold tracking-wide text-white">SURVIVAL WNI : Loker Jalur Orang Dalam</h1>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="px-3 py-1 bg-emerald-950 border border-emerald-600 text-emerald-400 text-xs font-bold rounded-lg">
-                        💵 Uang Arya: Rp {playerMoney.toLocaleString('id-ID')}
+                <div className="flex items-center gap-3">
+                    {/* HP Arya */}
+                    <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-neutral-800 border border-neutral-600 rounded-lg">
+                        <span className="text-[10px] text-red-400 font-bold">HP ARYA</span>
+                        <div className="w-20 h-2 bg-neutral-700 rounded overflow-hidden">
+                            <div className="h-full bg-red-500 transition-all" style={{ width: `${playerHpPct}%` }} />
+                        </div>
                     </div>
-                    <button onClick={() => router.push('/game')} className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs border border-neutral-600 rounded-lg transition cursor-pointer">
-                        ← Kembali
-                    </button>
+                    {/* HP Bos */}
+                    {(gameState === 'PLAYING' || gameState === 'FIGHT_CHOICE') && (
+                        <div className="flex items-center gap-2 px-3 py-1 bg-neutral-800 border border-red-700 rounded-lg">
+                            <span className="text-[10px] text-yellow-400 font-bold">OKNUM HRD</span>
+                            <div className="w-20 h-2 bg-neutral-700 rounded overflow-hidden">
+                                <div className="h-full bg-yellow-500 transition-all" style={{ width: `${bossHpPct}%` }} />
+                            </div>
+                        </div>
+                    )}
+                    <div className="px-3 py-1 bg-emerald-950 border border-emerald-600 text-emerald-400 text-xs font-bold rounded-lg">
+                        💵 Rp {playerMoney.toLocaleString('id-ID')}
+                    </div>
+                    <button onClick={() => router.push('/game')} className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs border border-neutral-600 rounded-lg transition cursor-pointer">← Kembali</button>
                 </div>
             </div>
 
             <canvas ref={canvasRef} className="absolute inset-0 block w-full h-full z-0" />
 
-            {/* DIALOG INTRO */}
-            {gameState === 'STORY_INTRO' && (
-                <div className="absolute bottom-8 left-8 right-8 bg-neutral-900/95 border-2 border-blue-500 p-6 rounded-2xl shadow-2xl backdrop-blur z-20 max-w-4xl mx-auto">
+            {/* DIALOG (Intro / Satpam / HRD) */}
+            {(gameState === 'STORY_INTRO' || gameState === 'SATPAM_DIALOG' || gameState === 'HRD_DIALOG') && (
+                <div className={`absolute bottom-8 left-8 right-8 bg-neutral-900/95 border-2 p-6 rounded-2xl shadow-2xl backdrop-blur z-20 max-w-4xl mx-auto ${gameState === 'HRD_DIALOG' ? 'border-red-500' : gameState === 'SATPAM_DIALOG' ? 'border-slate-500' : 'border-blue-500'}`}>
                     <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-sm px-3 py-1 rounded bg-blue-600 text-white">{introDialogs[dialogIndex].speaker}</span>
-                        <span className="text-xs text-neutral-400 font-mono">{dialogIndex + 1} / {introDialogs.length}</span>
+                        <span className={`font-bold text-sm px-3 py-1 rounded ${activeDialogs[dialogIndex]?.speaker === 'Arya' ? 'bg-green-600 text-white' : activeDialogs[dialogIndex]?.speaker === 'Oknum HRD' ? 'bg-red-600 text-white' : 'bg-slate-600 text-white'}`}>
+                            {activeDialogs[dialogIndex]?.speaker}
+                        </span>
+                        <span className="text-xs text-neutral-400 font-mono">{dialogIndex + 1} / {activeDialogs.length}</span>
                     </div>
-                    <p className="text-sm text-neutral-100 italic leading-relaxed my-3 min-h-[48px]">"{introDialogs[dialogIndex].text}"</p>
-                    <button onClick={handleNextDialog} className="w-full py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs rounded-xl border-b-4 border-blue-700 cursor-pointer">LANJUT ➔</button>
+                    <p className="text-sm text-neutral-100 italic leading-relaxed my-3 min-h-[48px]">"{activeDialogs[dialogIndex]?.text}"</p>
+                    <button onClick={handleNextDialog} className="w-full py-3 bg-blue-500 hover:bg-blue-400 text-white font-bold text-xs rounded-xl border-b-4 border-blue-700 cursor-pointer tracking-widest">LANJUT ➔</button>
                 </div>
             )}
 
@@ -410,42 +534,17 @@ export default function Level2Page() {
             {gameState === 'MISSION_OVERLAY' && (
                 <div onClick={() => setGameState('EXPLORE_LOBBY')} className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-8 cursor-pointer text-center select-none backdrop-blur-md">
                     <div className="max-w-md bg-neutral-900 border border-neutral-700 p-8 rounded-2xl shadow-2xl space-y-5 hover:border-blue-500/50 transition-colors">
-                        <div className="w-16 h-16 bg-blue-500/20 text-blue-400 border border-blue-500/40 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">🏢</div>
+                        <div className="w-16 h-16 bg-blue-500/20 text-blue-400 border border-blue-500/40 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">🏭</div>
                         <h2 className="text-xl font-bold text-blue-400 tracking-wider">MISI UTAMA LEVEL 2</h2>
-                        <p className="text-neutral-200 text-sm leading-relaxed">Arya berada di Lobi Pabrik untuk wawancara. Temui <span className="text-yellow-400 font-bold">Satpam</span> di meja resepsionis untuk menanyakan arah ruangan HRD.</p>
+                        <p className="text-neutral-200 text-sm leading-relaxed">Arya baru tiba di komplek PT. Maju Mundur Sentosa untuk wawancara. Temui <span className="text-yellow-400 font-bold">Komandan Satpam</span> di jalan aspal untuk menanyakan letak ruangan HRD.</p>
                         <div className="pt-4 border-t border-neutral-800"><p className="text-xs text-blue-300 animate-pulse font-mono font-semibold">[ Klik di mana saja untuk mulai berjalan ]</p></div>
                     </div>
                 </div>
             )}
 
-            {/* DIALOG SATPAM */}
-            {gameState === 'SATPAM_DIALOG' && (
-                <div className="absolute bottom-8 left-8 right-8 bg-neutral-900/95 border-2 border-slate-500 p-6 rounded-2xl shadow-2xl backdrop-blur z-20 max-w-4xl mx-auto">
-                    <div className="flex justify-between items-center mb-3">
-                        <span className="font-bold text-slate-300 text-base">Komandan Satpam</span>
-                        <span className="text-xs text-slate-400 bg-slate-900 px-3 py-1 rounded border border-slate-700">📍 Meja Resepsionis</span>
-                    </div>
-                    <p className="text-sm text-neutral-200 italic leading-relaxed my-2">"Oh, pelamar baru ya? Langsung saja masuk ke lorong ruangan HRD di sebelah kiri sana. Pintu karpet abu-abu. Hati-hati Dek, HRD di dalam itu suka minta 'Jalur Ordal' kalau mau diloloskan."</p>
-                    <button onClick={() => setGameState('WALK_TO_HRD')} className="w-full py-3 bg-slate-600 hover:bg-slate-500 text-white text-xs font-bold rounded-xl border-b-4 border-slate-800 cursor-pointer">MENUJU RUANGAN HRD →</button>
-                </div>
-            )}
-
             {gameState === 'WALK_TO_HRD' && (
                 <div className="absolute top-20 left-1/2 -translate-x-1/2 p-3 bg-neutral-900/90 border border-neutral-700 rounded-xl text-center text-xs text-yellow-400 tracking-wider shadow-2xl backdrop-blur z-20">
-                    Masuklah ke dalam Ruangan HRD di sebelah kiri melalui pintu!
-                </div>
-            )}
-
-            {/* DIALOG HRD */}
-            {gameState === 'HRD_DIALOG' && (
-                <div className="absolute bottom-8 left-8 right-8 bg-neutral-900/95 border-2 border-red-500 p-6 rounded-2xl shadow-2xl backdrop-blur z-20 max-w-4xl mx-auto">
-                    <div className="flex justify-between items-center mb-3">
-                        <span className="font-bold text-red-400 text-base">Oknum HRD Perusahaan</span>
-                        <span className="text-xs text-rose-300 bg-rose-950/80 px-3 py-1 rounded border border-rose-700/50">📍 Ruang Interview</span>
-                    </div>
-                    <p className="text-sm text-neutral-200 italic leading-relaxed my-2">"Wah, hasil tes kamu bagus sekali Arya. Tapi asal kamu tahu, kursi pekerja di sini terbatas. Kalau kamu mau posisi ini 'diamankan', kamu harus bayar biaya penempatan Rp 200.000 sekarang juga. Gimana?"</p>
-                    <p className="text-xs text-green-400 font-bold mb-5">Arya: "Ini pemerasan! Saya melamar dengan ijazah dan keahlian yang sah. Praktek kotor Bapak ini akan saya laporkan ke pimpinan!"</p>
-                    <button onClick={() => setGameState('FIGHT_CHOICE')} className="w-full py-3 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition tracking-widest border-b-4 border-red-800 cursor-pointer">TOLAK DAN BONGKAR PRAKTIK ORDAL! ⚡</button>
+                    Ikuti jalan aspal menuju Pintu HRD (gedung utama)!
                 </div>
             )}
 
@@ -453,13 +552,13 @@ export default function Level2Page() {
             {gameState === 'FIGHT_CHOICE' && (
                 <div className="absolute inset-0 bg-neutral-950/95 flex flex-col items-center justify-center p-8 text-center backdrop-blur-md z-30">
                     <h2 className="text-2xl font-bold text-blue-400 mb-2">PILIH LANGKAH ARYA!</h2>
-                    <p className="text-xs text-neutral-300 max-w-lg mb-6 leading-relaxed">Oknum HRD mencoba merampas kembali dokumenmu! Hindari dia dan rekam bukti pemerasan ini menggunakan HP-mu!</p>
+                    <p className="text-xs text-neutral-300 max-w-lg mb-6 leading-relaxed">Oknum HRD mencoba merampas dan menyobek dokumenmu! Hindari dia dan rekam bukti pemerasan Rp200.000 ini dengan HP-mu sebelum berkasmu hancur!</p>
                     <div className="flex flex-col gap-4 w-full max-w-md">
-                        <button onClick={() => { setGameState('PLAYING'); setLastActionText('GUNAKAN WASD UNTUK MENGHINDAR & TEKAN F/SPACE UNTUK MEREKAM!'); }} className="py-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl border-b-4 border-blue-800 transition shadow-lg flex items-center justify-center gap-2 cursor-pointer">
-                            <span>📱</span> LAWAN DENGAN KAMERA (Bongkar Bukti)
+                        <button onClick={() => { setGameState('PLAYING'); setBossHpPct(100); setPlayerHpPct(100); setLastActionText('GUNAKAN WASD UNTUK MENGHINDAR DI JALAN & TEKAN F/SPACE UNTUK MEREKAM!'); }} className="py-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl border-b-4 border-blue-800 transition shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                            <span>📱</span> LAWAN DENGAN KAMERA (Bongkar Bukti Ordal)
                         </button>
                         <button onClick={handleSurrender} className="py-4 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded-xl border-b-4 border-red-900 transition shadow-lg flex items-center justify-center gap-2 cursor-pointer">
-                            <span>💸</span> 🏳️ Menyerah (Bayar Uang Pelicin)
+                            <span>💸</span> 🏳️ Menyerah (Bayar Uang Penempatan Rp200.000)
                         </button>
                     </div>
                 </div>
@@ -470,7 +569,7 @@ export default function Level2Page() {
                 <div className="absolute inset-0 bg-neutral-950/95 flex flex-col items-center justify-center p-8 text-center backdrop-blur-md z-30">
                     <h2 className="text-3xl font-bold text-green-400 mb-3">LEVEL 2 SELESAI! 🎉</h2>
                     <p className="text-sm text-neutral-200 max-w-md mb-6 leading-relaxed">{lastActionText}</p>
-                    <button className="px-8 py-3.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-xl border-b-4 border-green-800 shadow-xl cursor-pointer">Lanjut ke Level 3 (Segera Hadir) →</button>
+                    <button onClick={() => router.push('/shop?next=3')} className="px-8 py-3.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-xl border-b-4 border-green-800 shadow-xl cursor-pointer">Lanjut ke Level 3 →</button>
                 </div>
             )}
 
@@ -481,13 +580,14 @@ export default function Level2Page() {
                     <p className="text-sm text-neutral-200 max-w-md mb-6 leading-relaxed">{lastActionText}</p>
                     <div className="flex gap-4">
                         <button onClick={restartGame} className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-xl border-b-4 border-green-800 cursor-pointer">Coba Lagi Level 2</button>
+                        <button onClick={() => router.push('/menu')} className="px-6 py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold rounded-xl border border-neutral-600 cursor-pointer">Kembali ke Menu</button>
                     </div>
                 </div>
             )}
 
             {gameState === 'PLAYING' && (
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 p-3 w-full max-w-3xl bg-neutral-900/90 border border-neutral-700 rounded-xl text-center text-xs text-yellow-400 tracking-wider shadow-2xl backdrop-blur z-20">
-                    {lastActionText || "Arahkan Arya (WASD) menjauhi HRD & Tekan F/Space untuk merekam bukti!"}
+                    {lastActionText || "Arahkan Arya (WASD) menjauhi Oknum HRD & Tekan F/Space untuk merekam bukti!"}
                 </div>
             )}
         </div>

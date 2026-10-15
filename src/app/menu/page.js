@@ -69,8 +69,71 @@ export default function MainMenuPage() {
                     </button>
 
                     <button
-                        onClick={() => alert('Lobby Multiplayer akan dibuat pada Dev 3!')}
+                        onClick={() => router.push('/level2')}
                         className="w-full py-4 bg-blue-600 hover:bg-blue-700 font-bold rounded text-lg tracking-wide border-b-4 border-blue-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 2 - LOKER ORDAL)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level3')}
+                        className="w-full py-4 bg-orange-600 hover:bg-orange-700 font-bold rounded text-lg tracking-wide border-b-4 border-orange-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 3 - PREMAN PARKIR)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level4')}
+                        className="w-full py-4 bg-red-600 hover:bg-red-700 font-bold rounded text-lg tracking-wide border-b-4 border-red-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 4 - KASTA PASIEN BPJS)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level5')}
+                        className="w-full py-4 bg-purple-600 hover:bg-purple-700 font-bold rounded text-lg tracking-wide border-b-4 border-purple-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 5 - KOS-KOSAN FIKTIF)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level6')}
+                        className="w-full py-4 bg-amber-600 hover:bg-amber-700 font-bold rounded text-lg tracking-wide border-b-4 border-amber-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 6 - UANG KEAMANAN ORMAS)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level7')}
+                        className="w-full py-4 bg-teal-600 hover:bg-teal-700 font-bold rounded text-lg tracking-wide border-b-4 border-teal-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 7 - LABIRIN BIROKRASI)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level8')}
+                        className="w-full py-4 bg-orange-600 hover:bg-orange-700 font-bold rounded text-lg tracking-wide border-b-4 border-orange-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 8 - SKANDAL BANSOS BERAS PLASTIK)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level9')}
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 font-bold rounded text-lg tracking-wide border-b-4 border-blue-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 9 - KRIMINALISASI & PASAL KARET)
+                    </button>
+
+                    <button
+                        onClick={() => router.push('/level10')}
+                        className="w-full py-4 bg-red-600 hover:bg-red-700 font-bold rounded text-lg tracking-wide border-b-4 border-red-900 active:translate-y-1 transition-all"
+                    >
+                        PLAY SOLO (LEVEL 10 - TUAN TANAH & SANG DALANG)
+                    </button>
+
+                    <button
+                        onClick={() => alert('Lobby Multiplayer akan dibuat pada Dev 3!')}
+                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 font-bold rounded text-lg tracking-wide border-b-4 border-indigo-900 active:translate-y-1 transition-all"
                     >
                         MULTIPLAYER LOBBY
                     </button>

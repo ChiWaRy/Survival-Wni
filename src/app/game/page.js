@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getSaveData, getEffectiveStats, setPlayerHp, completeLevel } from '../../lib/gameData';
 
 export default function GamePage() {
     const router = useRouter();
@@ -501,7 +502,7 @@ export default function GamePage() {
                 <div className="absolute inset-0 bg-neutral-950/95 flex flex-col items-center justify-center p-8 text-center backdrop-blur-md z-30">
                     <h2 className="text-3xl font-bold text-green-400 mb-3">LEVEL 1 BERHASIL DITAKLUKKAN! 🎉</h2>
                     <p className="text-sm text-neutral-200 max-w-md mb-6 leading-relaxed">{lastActionText}</p>
-                    <button onClick={() => router.push('/menu')} className="px-8 py-3.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-xl border-b-4 border-green-800 shadow-xl cursor-pointer">Lanjut ke Level Berikutnya →</button>
+                    <button onClick={() => router.push('/shop?next=2')} className="px-8 py-3.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded-xl border-b-4 border-green-800 shadow-xl cursor-pointer">Lanjut ke Level 2 →</button>
                 </div>
             )}
 
