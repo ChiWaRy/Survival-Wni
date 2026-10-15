@@ -5,6 +5,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { loadSpriteWithTransparentBg, loadImage } from '../../utils/assetLoader';
+import { rectIntersect, spawnFromPercent, clamp } from '../../utils/collision';
 
 export default function Level2Page() {
     const router = useRouter();
@@ -95,58 +97,15 @@ export default function Level2Page() {
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
 
-        // Load karakter (hapus background putih) - sama seperti Level 1
-        const loadCharImage = (src, ref) => {
-            const img = new Image();
-            img.src = src;
-            img.onload = () => {
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = img.naturalWidth;
-                tempCanvas.height = img.naturalHeight;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(img, 0, 0);
-                const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-                const data = imgData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i] > 220 && data[i + 1] > 220 && data[i + 2] > 220) data[i + 3] = 0;
-                }
-                tempCtx.putImageData(imgData, 0, 0);
-                const processedImg = new Image();
-                processedImg.src = tempCanvas.toDataURL();
-                processedImg.onload = () => { ref.current = processedImg; };
-            };
-        };
+        // Tileset dimuat apa adanya.
+        loadImage('/assets/tilemap_packed.png', extTilesetRef);
 
-        // Load gedung.jpg (hapus background hitam pekat) - sama seperti Level 1
-        const loadBuildingImage = (src, ref) => {
-            const img = new Image();
-            img.src = src;
-            img.onload = () => {
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = img.naturalWidth;
-                tempCanvas.height = img.naturalHeight;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(img, 0, 0);
-                const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-                const data = imgData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i] < 15 && data[i + 1] < 15 && data[i + 2] < 15) data[i + 3] = 0;
-                }
-                tempCtx.putImageData(imgData, 0, 0);
-                const processedImg = new Image();
-                processedImg.src = tempCanvas.toDataURL();
-                processedImg.onload = () => { ref.current = processedImg; };
-            };
-        };
-
-        loadCharImage('/assets/arya.jpg', aryaImgRef);            // Arya (Player)
-        loadCharImage('/assets/pak_rt.jpg', satpamImgRef);        // Komandan Satpam
-        loadCharImage('/assets/petugas_pungli.jpg', hrdImgRef);   // Oknum HRD
-        loadBuildingImage('/assets/gedung.jpg', cityTilesetRef);  // Gedung-gedung
-
-        const extTilesetImg = new Image();
-        extTilesetImg.src = '/assets/tilemap_packed.png';
-        extTilesetImg.onload = () => { extTilesetRef.current = extTilesetImg; };
+        // Karakter: buang background PUTIH.
+        loadSpriteWithTransparentBg('/assets/arya.jpg', aryaImgRef);            // Arya (Player)
+        loadSpriteWithTransparentBg('/assets/pak_rt.jpg', satpamImgRef);        // Komandan Satpam
+        loadSpriteWithTransparentBg('/assets/petugas_pungli.jpg', hrdImgRef);   // Oknum HRD
+        // Gedung: buang background HITAM pekat.
+        loadSpriteWithTransparentBg('/assets/gedung.jpg', cityTilesetRef, { background: 'black' });
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
@@ -182,37 +141,45 @@ export default function Level2Page() {
             // ==========================================================
             // TATA LETAK JALAN (aspal) - membentuk cincin agar bisa kiting
             // ==========================================================
-            const roadSideW = W * 0.12;          // lebar jalan vertikal
-            const leftX = W * 0.08;              // x jalan vertikal kiri
-            const rightX = W * 0.80;             // x jalan vertikal kanan
-            const topY = H * 0.22;               // y jalan horizontal atas
-            const topH = H * 0.12;               // tinggi jalan horizontal atas
-            const botY = H * 0.45;               // y jalan horizontal bawah (utama)
-            const botH = H * 0.15;               // tinggi jalan horizontal bawah
+            // Lebar/tinggi minimal dijaga (>= ukuran badan 72) supaya tidak ada
+            // "zona mati" ketika layar diperkecil (< 960px).
+            const roadSideW = Math.max(100, W * 0.12);   // lebar jalan vertikal
+            const leftX = W * 0.08;                      // x jalan vertikal kiri
+            const rightX = W * 0.80;                     // x jalan vertikal kanan
+            const topY = H * 0.22;                       // y jalan horizontal atas
+            const topH = Math.max(110, H * 0.12);        // tinggi jalan horizontal atas
+            const botY = H * 0.45;                       // y jalan horizontal bawah (utama)
+            const botH = Math.max(120, H * 0.15);        // tinggi jalan horizontal bawah
             const vertBottom = botY + botH;
 
+            // Semua segmen ditulis dengan width/height (bukan w/h) + saling overlap
+            // (tumpang-tindih di persimpangan) sehingga tidak menyisakan celah.
             const roadSegs = [
-                { x: 0, y: botY, w: W, h: botH },                                     // horizontal bawah (utama)
-                { x: leftX, y: topY, w: (rightX + roadSideW) - leftX, h: topH },      // horizontal atas
-                { x: leftX, y: topY, w: roadSideW, h: vertBottom - topY },            // vertikal kiri
-                { x: rightX, y: topY, w: roadSideW, h: vertBottom - topY },           // vertikal kanan
+                { x: 0, y: botY, width: W, height: botH },                                     // horizontal bawah (utama)
+                { x: leftX, y: topY, width: (rightX + roadSideW) - leftX, height: topH },      // horizontal atas
+                { x: leftX, y: topY, width: roadSideW, height: vertBottom - topY },            // vertikal kiri
+                { x: rightX, y: topY, width: roadSideW, height: vertBottom - topY },           // vertikal kanan
             ];
 
             // Titik pintu masuk gedung HRD (di atas jalan utama, tengah)
             const hrdEntrance = { x: W * 0.5, y: botY };
-            const hrdBuilding = { x: leftX + roadSideW, y: topY + topH, w: (rightX) - (leftX + roadSideW), h: botY - (topY + topH) };
+            const hrdBuilding = { x: leftX + roadSideW, y: topY + topH, width: (rightX) - (leftX + roadSideW), height: botY - (topY + topH) };
 
-            const isOnRoad = (x, y, size) => {
-                for (const s of roadSegs) {
-                    if (x >= s.x && x + size <= s.x + s.w && y >= s.y && y + size <= s.y + s.h) return true;
-                }
-                return false;
-            };
+            // canStand: SELURUH kotak badan harus berada di dalam SATU segmen jalan.
+            const canStandOnRoad = (x, y, size) => roadSegs.some((s) => (
+                x >= s.x && x + size <= s.x + s.width && y >= s.y && y + size <= s.y + s.height
+            ));
 
-            // Inisialisasi posisi sekali saja
+            // Inisialisasi posisi sekali saja (spawn aman berbasis persentase).
             if (!initedRef.current) {
-                player.x = W * 0.5;
-                player.y = botY + (botH - player.size) / 2;
+                const p = spawnFromPercent(canvas, {
+                    xPct: 0.5,
+                    yPct: (botY + botH / 2) / H,
+                    size: player.size,
+                    bounds: { left: 0, top: botY, right: W, bottom: botY + botH },
+                });
+                player.x = p.x;
+                player.y = p.y;
                 player.health = 100;
 
                 // Satpam berjaga di jalan utama, dekat pintu masuk
@@ -237,19 +204,19 @@ export default function Level2Page() {
             // Jalan aspal (dari tilemap_packed.png - crop 16,272,16,16)
             if (extTileset) {
                 for (const s of roadSegs) {
-                    for (let x = s.x; x < s.x + s.w; x += tileSize) {
-                        for (let y = s.y; y < s.y + s.h; y += tileSize) {
-                            const tw = Math.min(tileSize, s.x + s.w - x);
-                            const th = Math.min(tileSize, s.y + s.h - y);
+                    for (let x = s.x; x < s.x + s.width; x += tileSize) {
+                        for (let y = s.y; y < s.y + s.height; y += tileSize) {
+                            const tw = Math.min(tileSize, s.x + s.width - x);
+                            const th = Math.min(tileSize, s.y + s.height - y);
                             ctx.drawImage(extTileset, 16, 272, 16, 16, x, y, tw, th);
                         }
                     }
                     // Garis marka jalan putih
                     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-                    if (s.w > s.h) {
-                        for (let x = s.x + 16; x < s.x + s.w; x += 128) ctx.fillRect(x, s.y + s.h / 2 - 4, 64, 8);
+                    if (s.width > s.height) {
+                        for (let x = s.x + 16; x < s.x + s.width; x += 128) ctx.fillRect(x, s.y + s.height / 2 - 4, 64, 8);
                     } else {
-                        for (let y = s.y + 16; y < s.y + s.h; y += 128) ctx.fillRect(s.x + s.w / 2 - 4, y, 8, 64);
+                        for (let y = s.y + 16; y < s.y + s.height; y += 128) ctx.fillRect(s.x + s.width / 2 - 4, y, 8, 64);
                     }
                 }
             }
@@ -263,7 +230,7 @@ export default function Level2Page() {
 
                 // 1. Gedung PABRIK/HRD utama (di dalam cincin jalan)
                 ctx.drawImage(cityTileset, w * 0.48, 0, w * 0.52, h * 0.45,
-                    hrdBuilding.x, hrdBuilding.y, hrdBuilding.w, hrdBuilding.h);
+                    hrdBuilding.x, hrdBuilding.y, hrdBuilding.width, hrdBuilding.height);
 
                 // 2. Gedung kantor pendamping (kiri bawah, di rumput)
                 ctx.drawImage(cityTileset, 0, h * 0.45, w * 0.30, h * 0.55,
@@ -307,11 +274,11 @@ export default function Level2Page() {
                     const nextX = player.x + (dx / length) * player.speed;
                     const nextY = player.y + (dy / length) * player.speed;
 
-                    if (isOnRoad(nextX, nextY, player.size)) {
+                    if (canStandOnRoad(nextX, nextY, player.size)) {
                         player.x = nextX; player.y = nextY;
-                    } else if (isOnRoad(nextX, player.y, player.size)) {
+                    } else if (canStandOnRoad(nextX, player.y, player.size)) {
                         player.x = nextX; // geser horizontal saja (sliding)
-                    } else if (isOnRoad(player.x, nextY, player.size)) {
+                    } else if (canStandOnRoad(player.x, nextY, player.size)) {
                         player.y = nextY; // geser vertikal saja (sliding)
                     }
                 }
@@ -351,11 +318,11 @@ export default function Level2Page() {
                 if (hrd.y < player.y) nextHrdY += hrd.speed;
                 if (hrd.y > player.y) nextHrdY -= hrd.speed;
 
-                if (isOnRoad(nextHrdX, nextHrdY, hrd.size)) {
+                if (canStandOnRoad(nextHrdX, nextHrdY, hrd.size)) {
                     hrd.x = nextHrdX; hrd.y = nextHrdY;
                 } else {
-                    if (isOnRoad(nextHrdX, hrd.y, hrd.size)) hrd.x = nextHrdX;
-                    if (isOnRoad(hrd.x, nextHrdY, hrd.size)) hrd.y = nextHrdY;
+                    if (canStandOnRoad(nextHrdX, hrd.y, hrd.size)) hrd.x = nextHrdX;
+                    if (canStandOnRoad(hrd.x, nextHrdY, hrd.size)) hrd.y = nextHrdY;
                 }
 
                 hrd.frameTimer++;
@@ -428,10 +395,20 @@ export default function Level2Page() {
         const canvas = canvasRef.current;
         const W = canvas ? canvas.width : 1200;
         const H = canvas ? canvas.height : 720;
-        const botY = H * 0.45, botH = H * 0.15;
+        const botY = H * 0.45;
+        const botH = Math.max(120, H * 0.15);
 
-        playerRef.current = { ...playerRef.current, x: W * 0.5, y: botY + (botH - 72) / 2, health: 100, isWalking: false, facingDirection: 'down', frameIndex: 1 };
-        hrdRef.current = { ...hrdRef.current, x: W * 0.5, y: botY + (botH - 72) / 2, health: 150, isWalking: false, facingDirection: 'down', frameIndex: 1 };
+        const p = canvas
+            ? spawnFromPercent(canvas, {
+                xPct: 0.5,
+                yPct: (botY + botH / 2) / H,
+                size: playerRef.current.size,
+                bounds: { left: 0, top: botY, right: W, bottom: botY + botH },
+            })
+            : { x: W * 0.5, y: botY + (botH - 72) / 2 };
+
+        playerRef.current = { ...playerRef.current, x: p.x, y: p.y, health: 100, isWalking: false, facingDirection: 'down', frameIndex: 1 };
+        hrdRef.current = { ...hrdRef.current, x: W * 0.5, y: p.y, health: 150, isWalking: false, facingDirection: 'down', frameIndex: 1 };
         setPlayerMoney(200000); setBossHpPct(100); setPlayerHpPct(100);
         setDialogIndex(0); setLastActionText('');
         setGameState('EXPLORE_LOBBY');
@@ -451,10 +428,7 @@ export default function Level2Page() {
         return { x: p.x + (p.size - width) / 2, y: p.y + p.size, width: width, height: reach };
     };
 
-    const rectIntersect = (r1, r2) => {
-        const w1 = r1.width || r1.size, h1 = r1.height || r1.size; const w2 = r2.width || r2.size, h2 = r2.height || r2.size;
-        return r1.x < r2.x + w2 && r1.x + w1 > r2.x && r1.y < r2.y + h2 && r1.y + h1 > r2.y;
-    };
+    // (Kolisi rectIntersect kini diimpor dari src/utils/collision.js)
 
     const renderSpriteSheet = (ctx, img, entity, label) => {
         if (img) {

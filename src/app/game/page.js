@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSaveData, getEffectiveStats, setPlayerHp, completeLevel } from '../../lib/gameData';
+import { loadSpriteWithTransparentBg, loadImage } from '../../utils/assetLoader';
+import { rectIntersect, spawnFromPercent, clamp } from '../../utils/collision';
 
 export default function GamePage() {
     const router = useRouter();
@@ -52,57 +54,18 @@ export default function GamePage() {
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
 
-        const tilesetImg = new Image();
-        tilesetImg.src = '/assets/tileset_interior.png';
-        tilesetImg.onload = () => { tilesetImgRef.current = tilesetImg; };
+        // Tileset dimuat apa adanya (background asli dipertahankan).
+        loadImage('/assets/tileset_interior.png', tilesetImgRef);
+        loadImage('/assets/tilemap_packed.png', extTilesetImgRef);
 
-        const extTilesetImg = new Image();
-        extTilesetImg.src = '/assets/tilemap_packed.png';
-        extTilesetImg.onload = () => { extTilesetImgRef.current = extTilesetImg; };
+        // Karakter: buang background PUTIH.
+        loadSpriteWithTransparentBg('/assets/arya.jpg', aryaImgRef);
+        loadSpriteWithTransparentBg('/assets/kakek.jpg', kakekImgRef);
+        loadSpriteWithTransparentBg('/assets/pak_rt.jpg', pakRtImgRef);
+        loadSpriteWithTransparentBg('/assets/petugas_pungli.jpg', enemyImgRef);
 
-        const loadTransparentImage = (src, ref, isBlackBackground = false) => {
-            const img = new Image();
-            img.src = src;
-            img.onload = () => {
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = img.naturalWidth;
-                tempCanvas.height = img.naturalHeight;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(img, 0, 0);
-
-                const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-                const data = imgData.data;
-
-                for (let i = 0; i < data.length; i += 4) {
-                    const r = data[i]; const g = data[i + 1]; const b = data[i + 2];
-
-                    if (isBlackBackground) {
-                        // Hapus background Hitam Pekat untuk gambar gedung.jpg baru
-                        if (r < 15 && g < 15 && b < 15) {
-                            data[i + 3] = 0; // Jadikan transparan
-                        }
-                    } else {
-                        // Hapus background Putih untuk karakter
-                        if (r > 220 && g > 220 && b > 220) {
-                            data[i + 3] = 0;
-                        }
-                    }
-                }
-
-                tempCtx.putImageData(imgData, 0, 0);
-                const processedImg = new Image();
-                processedImg.src = tempCanvas.toDataURL();
-                processedImg.onload = () => { ref.current = processedImg; };
-            };
-        };
-
-        loadTransparentImage('/assets/arya.jpg', aryaImgRef, false);
-        loadTransparentImage('/assets/kakek.jpg', kakekImgRef, false);
-        loadTransparentImage('/assets/pak_rt.jpg', pakRtImgRef, false);
-        loadTransparentImage('/assets/petugas_pungli.jpg', enemyImgRef, false);
-
-        // Memuat gedung.jpg dengan filter penghapus latar hitam!
-        loadTransparentImage('/assets/gedung.jpg', cityTilesetRef, true);
+        // Gedung: buang background HITAM pekat.
+        loadSpriteWithTransparentBg('/assets/gedung.jpg', cityTilesetRef, { background: 'black' });
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
@@ -118,21 +81,50 @@ export default function GamePage() {
         const resizeCanvas = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+
+            // Spawn aman berbasis persentase (anti "zona mati" saat resize).
+            // Sebelumnya dipatok startY + 320, yang bisa jatuh ke luar area jalan
+            // ketika tinggi layar kecil. Sekarang: x = 30% lebar, y = 62% tinggi,
+            // lalu di-clamp ke dalam ruang rumah agar selalu valid.
             const houseW = 740, houseH = 480;
             const startX = (canvas.width - houseW) / 2, startY = (canvas.height - houseH) / 2;
+            const houseBounds = {
+                left: startX + 20,
+                top: startY + 110,
+                right: startX + houseW - 20,
+                bottom: startY + houseH - 14,
+            };
 
-            if (playerRef.current.x === 0) { playerRef.current.x = startX + 220; playerRef.current.y = startY + 320; }
-            if (kakekRef.current.x === 0) { kakekRef.current.x = startX + 150; kakekRef.current.y = startY + 190; }
+            if (playerRef.current.x === 0) {
+                const p = spawnFromPercent(canvas, { xPct: 0.3, yPct: 0.62, size: 72, bounds: houseBounds });
+                playerRef.current.x = p.x;
+                playerRef.current.y = p.y;
+            }
+            if (kakekRef.current.x === 0) {
+                kakekRef.current.x = startX + 150;
+                kakekRef.current.y = startY + 190;
+            }
         };
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
-        const isOnRoad = (x, y, size) => {
-            const inMainRoad = y >= 320 && y + size <= 512 && x >= 0 && x + size <= Math.max(canvas.width, 1200);
-            const inLeftRoad = x >= 50 && x + size <= 242 && y >= 320 && y + size <= canvas.height;
-            const inRightRoad = x >= 750 && x + size <= 942 && y >= 0 && y + size <= 512;
-            return inMainRoad || inLeftRoad || inRightRoad;
+        // Band saling tumpang-tindih (overlap) sehingga tidak ada celah setinggi badan.
+// Referensi desain 1200x720: main road y≈320 (0.44H), tinggi≈192 (0.27H).
+        const roadBands = () => {
+            const W = canvas.width, H = canvas.height;
+            const mainY = H * 0.44;
+            const mainH = Math.max(120, H * 0.27);
+            const mainBottom = mainY + mainH; // ≈ H * 0.71
+            return [
+                { x: 0,   y: mainY, width: W,   height: mainH },                 // jalan utama
+                { x: 50,  y: mainY, width: 192, height: Math.max(60, H - mainY) }, // jalan kiri (overlap)
+                { x: 750, y: 0,     width: 192, height: Math.max(60, mainBottom) }, // jalan kanan (overlap)
+            ];
         };
+
+        const isOnRoad = (x, y, size) => roadBands().some((s) => (
+            x >= s.x && x + size <= s.x + s.width && y >= s.y && y + size <= s.y + s.height
+        ));
 
         let animationFrameId;
 
@@ -184,16 +176,30 @@ export default function GamePage() {
                             }
                         }
                     };
-                    drawRoadBlock(0, 320, canvas.width, 192);
-                    drawRoadBlock(50, 512, 192, canvas.height - 512);
-                    drawRoadBlock(750, 0, 192, 320);
+                    // Ukuran band jalan berbasis persentase canvas (sinkron dengan roadBands()).
+                // Referensi desain 1200x720: main road y≈320 (0.44H), tinggi≈192 (0.27H).
+                const mainY = H * 0.44;
+                const mainH = Math.max(120, H * 0.27);
+                const mainBottom = mainY + mainH; // ≈ H * 0.71
 
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-                    for (let x = 0; x < canvas.width; x += 128) {
-                        if (!((x > 0 && x < 242) || (x > 700 && x < 942))) ctx.fillRect(x + 32, 412, 64, 8);
-                    }
-                    for (let y = 512; y < canvas.height; y += 128) ctx.fillRect(142, y + 32, 8, 64);
-                    for (let y = 0; y < 320; y += 128) ctx.fillRect(842, y + 32, 8, 64);
+                // Gambar tiga segmen jalan (overlap -> tidak ada celah).
+                drawRoadBlock(0, mainY, canvas.width, mainH);                     // jalan utama
+                drawRoadBlock(50, mainBottom, 192, canvas.height - mainBottom);   // jalan kiri
+                drawRoadBlock(750, 0, 192, mainBottom);                           // jalan kanan
+
+                // Garis marka jalan putih
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+                // marka horizontal (tengah jalan utama)
+                for (let x = 0; x < canvas.width; x += 128) {
+                    ctx.fillRect(x + 32, mainY + mainH / 2 - 4, 64, 8);
+                }
+                // marka vertikal (tengah jalan kiri & kanan)
+                for (let y = mainBottom; y < canvas.height; y += 128) {
+                    ctx.fillRect(50 + 96 - 4, y, 8, 64);
+                }
+                for (let y = 0; y < mainBottom; y += 128) {
+                    ctx.fillRect(750 + 96 - 4, y, 8, 64);
+                }
                 }
 
                 // ========================================================
@@ -285,7 +291,19 @@ export default function GamePage() {
                 if (distToGrandpa < 90 && keys['e']) setGameState('GRANDPA_DIALOG');
             } else if (gameState === 'WALK_TO_DOOR') {
                 const doorY = startY + houseH - 22;
-                if (player.y >= doorY) { player.x = 200; player.y = 330; setGameState('EXPLORE_RT'); }
+                if (player.y >= doorY) {
+                    // Keluar rumah -> spawn ke jalan utama pakai persentase (aman di semua resolusi).
+                    const mainY = H * 0.44;
+                    const mainH = Math.max(120, H * 0.27);
+                    const sp = spawnFromPercent(canvas, {
+                        xPct: 0.5,
+                        yPct: (mainY + mainH / 2) / H,
+                        size: player.size,
+                    });
+                    player.x = sp.x;
+                    player.y = clamp(sp.y, mainY + 4, mainY + mainH - player.size - 4);
+                    setGameState('EXPLORE_RT');
+                }
             } else if (gameState === 'EXPLORE_RT') {
                 const distToRt = Math.hypot(player.x - pakRt.x, player.y - pakRt.y);
                 if (distToRt < 90 && keys['e']) setGameState('RT_DIALOG');
@@ -383,7 +401,17 @@ export default function GamePage() {
         const houseW = 740, houseH = 480;
         const startX = canvas ? (canvas.width - houseW) / 2 : 200;
         const startY = canvas ? (canvas.height - houseH) / 2 : 100;
-        playerRef.current = { ...playerRef.current, x: startX + 220, y: startY + 320, health: 100, isWalking: false, facingDirection: 'down', frameIndex: 1 };
+        const houseBounds = {
+            left: startX + 20,
+            top: startY + 110,
+            right: startX + houseW - 20,
+            bottom: startY + houseH - 14,
+        };
+        const p = canvas
+            ? spawnFromPercent(canvas, { xPct: 0.3, yPct: 0.62, size: 72, bounds: houseBounds })
+            : { x: startX + 220, y: startY + 320 };
+
+        playerRef.current = { ...playerRef.current, x: p.x, y: p.y, health: 100, isWalking: false, facingDirection: 'down', frameIndex: 1 };
         enemyRef.current = { ...enemyRef.current, x: 950, y: 330, health: 100, isWalking: false, facingDirection: 'left', frameIndex: 1 };
         setPlayerMoney(200000); setGameState('EXPLORE_HOUSE'); setDialogIndex(0); setLastActionText('');
     };
@@ -401,10 +429,7 @@ export default function GamePage() {
         return { x: p.x + (p.size - width) / 2, y: p.y + p.size, width: width, height: reach };
     };
 
-    const rectIntersect = (r1, r2) => {
-        const w1 = r1.width || r1.size, h1 = r1.height || r1.size; const w2 = r2.width || r2.size, h2 = r2.height || r2.size;
-        return r1.x < r2.x + w2 && r1.x + w1 > r2.x && r1.y < r2.y + h2 && r1.y + h1 > r2.y;
-    };
+    // (Kolisi rectIntersect kini diimpor dari src/utils/collision.js)
 
     const renderSpriteSheet = (ctx, img, entity, label) => {
         if (img) {

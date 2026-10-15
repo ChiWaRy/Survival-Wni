@@ -17,6 +17,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAssetLoader } from '../../hooks/useAssetLoader';
 
 export default function Level10Page() {
     const router = useRouter();
@@ -115,6 +116,11 @@ export default function Level10Page() {
     const hackedRef = useRef([false, false, false]);
     const hackUiRef = useRef(0);
     const hackPctUiRef = useRef(0);
+    const { assets, isLoaded } = useAssetLoader();
+
+    if (!isLoaded) {
+        return <div className="text-white flex items-center justify-center h-screen bg-black">Loading Game Assets...</div>;
+    }
 
     useEffect(() => {
         const handleKeyDown = (e) => { keysRef.current[e.key.toLowerCase()] = true; };
@@ -122,36 +128,7 @@ export default function Level10Page() {
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
 
-        // Load karakter (hapus background putih) - gaya sama Level 9
-        const loadCharImage = (src, ref) => {
-            const img = new Image();
-            img.src = src;
-            img.onload = () => {
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = img.naturalWidth;
-                tempCanvas.height = img.naturalHeight;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.drawImage(img, 0, 0);
-                const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-                const data = imgData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i] > 220 && data[i + 1] > 220 && data[i + 2] > 220) data[i + 3] = 0;
-                }
-                tempCtx.putImageData(imgData, 0, 0);
-                const processedImg = new Image();
-                processedImg.src = tempCanvas.toDataURL();
-                processedImg.onload = () => { ref.current = processedImg; };
-            };
-        };
 
-        loadCharImage('/assets/arya.jpg', aryaImgRef);            // Arya (Player)
-        loadCharImage('/assets/pak_rt.jpg', csImgRef);            // Whistleblower
-        loadCharImage('/assets/petugas_pungli.jpg', pejabatImgRef); // Sang Dalang (bos)
-        loadCharImage('/assets/petugas_pungli.jpg', guardImgRef);   // Bodyguard
-
-        const extTilesetImg = new Image();
-        extTilesetImg.src = '/assets/tilemap_packed.png';
-        extTilesetImg.onload = () => { extTilesetRef.current = extTilesetImg; };
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown);

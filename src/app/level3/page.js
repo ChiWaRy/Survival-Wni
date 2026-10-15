@@ -194,19 +194,18 @@ export default function Level3Page() {
             // Semak (tempat preman muncul)
             const bush = { x: W * 0.14, y: H * 0.52, w: 120, h: 60 };
 
-            const inParking = (x, y, size) => {
+            // Area yang boleh dilewati: dari bawah ruko (lotTop) sampai tepi bawah layar.
+            // Sebelumnya dibagi 2 zona (parkiran & jalan) yang menyisakan "zona mati" setinggi
+            // ukuran Arya di antaranya -> Arya nyangkut / tidak bisa bergerak sama sekali.
+            const canWalk = (x, y, size) => {
                 return x >= 0 && x + size <= W &&
-                    y >= lotTop && y + size <= lotBottom;
+                    y >= lotTop && y + size <= H;
             };
-            const onRoad = (x, y, size) => {
-                return x >= 0 && x + size <= W && y >= roadY && y + size <= H;
-            };
-            const canWalk = (x, y, size) => inParking(x, y, size) || onRoad(x, y, size);
 
             // Inisialisasi posisi sekali saja
             if (!initedRef.current) {
                 player.x = W * 0.5;
-                player.y = H * 0.80;    // Arya mulai dari arah jalan raya
+                player.y = H - 96;    // Jalan raya, tengah bawah
                 player.health = 100;
 
                 // Ibu warung di sudut parkiran (kanan bawah)
@@ -540,7 +539,7 @@ export default function Level3Page() {
         const W = canvas ? canvas.width : 1200;
         const H = canvas ? canvas.height : 720;
 
-        playerRef.current = { ...playerRef.current, x: W * 0.5, y: H * 0.80, health: 100, isWalking: false, facingDirection: 'down', frameIndex: 1 };
+        playerRef.current = { ...playerRef.current, x: W * 0.5, y: H - 96, health: 100, isWalking: false, facingDirection: 'down', frameIndex: 1 };
         jukirRef.current = { ...jukirRef.current, x: W * 0.16, y: H * 0.44, health: 175, isWalking: false, facingDirection: 'down', frameIndex: 1 };
         keyItemRef.current = { ...keyItemRef.current, x: W * 0.08, y: H * 0.66, taken: false };
         projectilesRef.current = [];
@@ -565,7 +564,8 @@ export default function Level3Page() {
     };
 
     const rectIntersect = (r1, r2) => {
-        const w1 = r1.width || r1.size, h1 = r1.height || r1.size; const w2 = r2.width || r2.size, h2 = r2.height || r2.size;
+        const w1 = r1.width ?? r1.w ?? r1.size, h1 = r1.height ?? r1.h ?? r1.size;
+        const w2 = r2.width ?? r2.w ?? r2.size, h2 = r2.height ?? r2.h ?? r2.size;
         return r1.x < r2.x + w2 && r1.x + w1 > r2.x && r1.y < r2.y + h2 && r1.y + h1 > r2.y;
     };
 
